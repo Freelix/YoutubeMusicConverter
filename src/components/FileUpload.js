@@ -31,8 +31,26 @@ const FileUpload = ({ onFileUpload }) => {
           return;
         }
 
-        setError(null);
-        onFileUpload(lines);
+        // Remove duplicate URLs while preserving order
+        const uniqueUrls = [];
+        const urlSet = new Set();
+        
+        for (const url of lines) {
+          if (!urlSet.has(url)) {
+            urlSet.add(url);
+            uniqueUrls.push(url);
+          }
+        }
+
+        // If duplicates were found, show an info message
+        if (uniqueUrls.length < lines.length) {
+          const duplicateCount = lines.length - uniqueUrls.length;
+          setError(`Removed ${duplicateCount} duplicate URL${duplicateCount > 1 ? 's' : ''}. Processing ${uniqueUrls.length} unique URL${uniqueUrls.length !== 1 ? 's' : ''}.`);
+        } else {
+          setError(null);
+        }
+
+        onFileUpload(uniqueUrls);
       } catch (err) {
         setError('Failed to read file. Please try again.');
       }
