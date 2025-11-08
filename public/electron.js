@@ -7,6 +7,7 @@ const JSZip = require('jszip');
 const NodeID3 = require('node-id3');
 const axios = require('axios');
 const youtubedl = require('youtube-dl-exec');
+const { searchRecording } = require(path.join(__dirname, '../src/services/musicbrainzService'));
 
 // Set ffmpeg path
 if (ffmpegPath) {
@@ -196,12 +197,46 @@ ipcMain.handle('download-video', async (event, { url, index, total }) => {
     // Add metadata
     if (fs.existsSync(outputPath)) {
       try {
+        // Basic metadata from YouTube
         const tags = {
           title: title,
           artist: author,
           album: 'YouTube Downloads',
+          comment: `Downloaded from YouTube: ${url}`,
+          year: new Date().getFullYear().toString(),
+          genre: 'YouTube',
+          composer: '',
+          trackNumber: '1',
+          totalTracks: '1',
+          albumArtist: author
         };
+
+        // Try to get enhanced metadata from MusicBrainz
+        try {
+          const mbMetadata = await searchRecording(author, title);
+          if (mbMetadata) {
+            // Update tags with MusicBrainz metadata if available
+            Object.assign(tags, {
+              title: mbMetadata.title || title,
+              artist: mbMetadata.artist || author,
+              album: mbMetadata.album || 'YouTube Downloads',
+              year: mbMetadata.year || new Date().getFullYear().toString(),
+              genre: mbMetadata.genre || 'YouTube',
+              composer: mbMetadata.composer || '',
+              trackNumber: mbMetadata.trackNumber || '1',
+              totalTracks: mbMetadata.totalTracks || '1',
+              albumArtist: mbMetadata.albumArtist || author,
+              comment: `Downloaded from YouTube: ${url}`,
+              recordingId: mbMetadata.recordingId || '',
+              releaseId: mbMetadata.releaseId || ''
+            });
+          }
+        } catch (mbError) {
+          console.error('Error fetching MusicBrainz metadata:', mbError);
+          // Continue with basic metadata if MusicBrainz fails
+        }
         
+        // Add thumbnail if available
         if (thumbnailBuffer) {
           tags.image = {
             mime: 'image/jpeg',
@@ -211,7 +246,15 @@ ipcMain.handle('download-video', async (event, { url, index, total }) => {
           };
         }
         
+        // Write all metadata to the file
         NodeID3.write(tags, outputPath);
+        
+        console.log('Metadata written successfully:', {
+          title: tags.title,
+          artist: tags.artist,
+          album: tags.album,
+          year: tags.year
+        });
       } catch (err) {
         console.error('Failed to write metadata:', err);
       }
