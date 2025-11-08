@@ -74,8 +74,19 @@ if (!fs.existsSync(tempDir)) {
 }
 
 // Validate YouTube URL
-ipcMain.handle('validate-url', async (event, url) => {
-  console.log('Validating URL:', url);
+ipcMain.handle('validate-url', async (event, { url, index, total }) => {
+  console.log(`Validating URL ${index + 1}/${total}:`, url);
+  
+  // Emit progress update
+  const mainWindow = BrowserWindow.getFocusedWindow();
+  if (mainWindow) {
+    mainWindow.webContents.send('validation-progress', {
+      current: index + 1,
+      total,
+      status: `Validating URL ${index + 1} of ${total}`,
+      currentUrl: url
+    });
+  }
   
   try {
     // Basic URL validation

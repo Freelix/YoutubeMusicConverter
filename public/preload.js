@@ -16,8 +16,55 @@ const invokeWithErrorHandling = async (method, ...args) => {
 };
 
 // Expose the API to the renderer process
+const { remote } = require('electron');
+
 contextBridge.exposeInMainWorld('electronAPI', {
+  getCurrentWindow: () => remote.getCurrentWindow(),
   validateUrl: (url) => invokeWithErrorHandling('validate-url', url),
+  onValidationProgress: (callback) => {
+    try {
+      // Store the callback with a unique ID
+      const callbackId = `validation-progress-${Date.now()}`;
+      const listener = (event, data) => {
+        try {
+          if (typeof callback === 'function') {
+            callback(data);
+          }
+        } catch (err) {
+          console.error('Error in validation progress callback:', err);
+        }
+      };
+      
+      // Store the listener with its ID
+      window._validationProgressListeners = window._validationProgressListeners || {};
+      window._validationProgressListeners[callbackId] = listener;
+      
+      // Add the listener
+      ipcRenderer.on('validation-progress', listener);
+      
+      // Return the ID for later removal if needed
+      return callbackId;
+    } catch (error) {
+      console.error('Error setting up validation progress listener:', error);
+      return null;
+    }
+  },
+  removeValidationProgressListener: (callbackId) => {
+    try {
+      if (window._validationProgressListeners && window._validationProgressListeners[callbackId]) {
+        ipcRenderer.removeListener('validation-progress', window._validationProgressListeners[callbackId]);
+        delete window._validationProgressListeners[callbackId];
+      } else if (!callbackId) {
+        // If no callbackId is provided, remove all listeners
+        ipcRenderer.removeAllListeners('validation-progress');
+        if (window._validationProgressListeners) {
+          delete window._validationProgressListeners;
+        }
+      }
+    } catch (error) {
+      console.error('Error removing validation progress listener:', error);
+    }
+  },
   downloadVideo: (data) => invokeWithErrorHandling('download-video', data),
   createZip: (files) => invokeWithErrorHandling('create-zip', files),
   cleanup: () => invokeWithErrorHandling('cleanup'),

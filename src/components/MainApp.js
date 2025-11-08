@@ -41,13 +41,54 @@ const MainApp = () => {
     // Validate all URLs first
     const validationResults = [];
     
+    // Set up validation progress handler
+    let validationProgressCallbackId = null;
+    if (window.electronAPI && window.electronAPI.onValidationProgress) {
+      // Store the callback ID for cleanup
+      validationProgressCallbackId = window.electronAPI.onValidationProgress((data) => {
+        // Progress updates are handled by the ProgressTracker component
+        console.log('Validation progress:', data);
+      });
+      
+      // Emit initial validation progress
+      try {
+        // In development, use window.require to get remote
+        const { remote } = window.require('electron');
+        const mainWindow = remote.getCurrentWindow();
+        if (mainWindow && mainWindow.webContents) {
+          mainWindow.webContents.send('validation-progress', {
+            current: 0,
+            total: urls.length,
+            status: 'Starting validation...',
+            currentUrl: ''
+          });
+        }
+      } catch (error) {
+        console.warn('Could not get main window:', error);
+      }
+    }
+    
     for (let i = 0; i < urls.length; i++) {
       const url = urls[i];
       console.log(`\n--- Validating URL ${i + 1}/${urls.length}:`, url);
       
+      // Update validation progress
+      if (window.electronAPI && window.electronAPI.onValidationProgress) {
+        window.electronAPI.onValidationProgress({
+          current: i + 1,
+          total: urls.length,
+          status: `Validating URL ${i + 1} of ${urls.length}`,
+          currentUrl: url
+        });
+      }
+      
       try {
         console.log('Calling validateUrl...');
-        const result = await window.electronAPI.validateUrl(url);
+        const result = await window.electronAPI.validateUrl({
+          url,
+          index: i,
+          total: urls.length
+        });
         console.log('Validation result:', result);
         
         validationResults.push({
@@ -127,6 +168,11 @@ const MainApp = () => {
       zipPath,
     });
 
+    // Clean up validation progress listener
+    if (validationProgressCallbackId && window.electronAPI && window.electronAPI.removeValidationProgressListener) {
+      window.electronAPI.removeValidationProgressListener(validationProgressCallbackId);
+    }
+    
     setIsProcessing(false);
     setCurrentStep('report');
   }, [urls]);

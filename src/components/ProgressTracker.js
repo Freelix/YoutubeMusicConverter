@@ -3,13 +3,19 @@ import './ProgressTracker.css';
 
 const ProgressTracker = ({ totalUrls, validatedUrls }) => {
   const [videoProgress, setVideoProgress] = useState({});
+  const [validationProgress, setValidationProgress] = useState({
+    current: 0,
+    total: totalUrls,
+    status: 'Waiting to start...',
+    currentUrl: ''
+  });
   const [overallProgress, setOverallProgress] = useState(0);
   const [completedCount, setCompletedCount] = useState(0);
 
   useEffect(() => {
     if (!window.electronAPI) return;
 
-    const handleProgress = (data) => {
+    const handleVideoProgress = (data) => {
       setVideoProgress((prev) => {
         const newProgress = {
           ...prev,
@@ -24,14 +30,25 @@ const ProgressTracker = ({ totalUrls, validatedUrls }) => {
       });
     };
 
-    window.electronAPI.onVideoProgress(handleProgress);
+    const handleValidationProgress = (data) => {
+      setValidationProgress({
+        current: data.current || 0,
+        total: data.total || totalUrls,
+        status: data.status || 'Validating...',
+        currentUrl: data.currentUrl || ''
+      });
+    };
+
+    window.electronAPI.onVideoProgress(handleVideoProgress);
+    window.electronAPI.onValidationProgress(handleValidationProgress);
 
     return () => {
       if (window.electronAPI) {
         window.electronAPI.removeVideoProgressListener();
+        window.electronAPI.removeValidationProgressListener();
       }
     };
-  }, []);
+  }, [totalUrls]);
 
   useEffect(() => {
     const validCount = validatedUrls.filter((v) => v.valid).length;
@@ -50,7 +67,7 @@ const ProgressTracker = ({ totalUrls, validatedUrls }) => {
 
   const validUrls = validatedUrls.filter((v) => v.valid);
   const invalidUrls = validatedUrls.filter((v) => !v.valid);
-  const isValidating = validatedUrls.length === 0;
+  const isValidating = validatedUrls.length < totalUrls && validationProgress.current < totalUrls;
 
   return (
     <div className="progress-tracker-container">
@@ -60,7 +77,28 @@ const ProgressTracker = ({ totalUrls, validatedUrls }) => {
         {isValidating ? (
           <div className="validating-message">
             <div className="loader-spinner"></div>
-            <p>Validating URLs...</p>
+            <div className="validation-progress">
+              <p className="validation-status">{validationProgress.status}</p>
+              {validationProgress.currentUrl && (
+                <p className="current-url">
+                  {validationProgress.currentUrl.length > 50 
+                    ? `${validationProgress.currentUrl.substring(0, 47)}...`
+                    : validationProgress.currentUrl}
+                </p>
+              )}
+              <div className="progress-bar-container">
+                <div 
+                  className="progress-bar-fill" 
+                  style={{
+                    width: `${(validationProgress.current / validationProgress.total) * 100}%`,
+                    backgroundColor: '#4CAF50'
+                  }}
+                />
+              </div>
+              <p className="progress-text">
+                {validationProgress.current} of {validationProgress.total} URLs validated
+              </p>
+            </div>
           </div>
         ) : (
           <>
