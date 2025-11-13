@@ -9,27 +9,41 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "electron": "electron .",
-    "electron-dev": "ELECTRON_IS_DEV=1 electron .",
+    "electron-dev": "cross-env ELECTRON_IS_DEV=1 electron .",
     "electron-pack": "electron-builder",
-    "preelectron-pack": "npm run build"
+    "preelectron-pack": "npm run build",
+    "build:win": "node build-win.js",
+    "package-win": "electron-builder build --win --x64"
   },
   "build": {
     "appId": "com.youtubeconverter.app",
     "productName": "YouTube Music Converter",
+    "copyright": "Copyright © 2025",
     "directories": {
-      "buildResources": "build"
+      "output": "dist"
     },
     "files": [
       "build/**/*",
       "public/electron.js",
       "node_modules/**/*"
     ],
-    "mac": {
-      "category": "public.app-category.utilities",
-      "target": "dmg"
-    },
     "win": {
-      "target": "nsis"
+      "target": ["nsis", "portable"],
+      "publisherName": "YouTube Music Converter",
+      "verifyUpdateCodeSignature": false,
+      "rfc3161TimeStampServer": "http://timestamp.digicert.com"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "YouTube Music Converter",
+      "deleteAppDataOnUninstall": true
+    },
+    "portable": {
+      "artifactName": "YouTubeMusicConverterPortable.exe"
     }
   },
   "dependencies": {
@@ -46,7 +60,9 @@
     "ytdl-core": "^4.11.5"
   },
   "devDependencies": {
+    "@electron/windows-sign": "^2.0.2",
     "@types/node": "^20.10.0",
+    "cross-env": "^10.1.0",
     "electron": "^27.0.0",
     "electron-builder": "^24.6.4"
   },
