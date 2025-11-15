@@ -1,0 +1,35 @@
+name: Build Windows App on Release
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build-windows:
+    name: Build Windows App
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Build Windows app
+      run: npm run build:win
+      env:
+        NODE_ENV: production
+    
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: windows-app
+        path: dist/win-unpacked/**/*
+        if-no-files-found: error
