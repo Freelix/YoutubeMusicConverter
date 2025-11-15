@@ -57,6 +57,14 @@ npm run electron-pack
 
 The built application will be in the `dist` directory.
 
+# Build Windows application
+
+```bash
+npm run build:win
+```
+
+- It will create a 2 Windows executables in the `dist` directory. One portable and one with an installer.
+
 ## Usage
 
 1. **Prepare your URL list**: Create a `.txt` file with one YouTube URL per line:
