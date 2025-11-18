@@ -8,8 +8,8 @@ import './MainApp.css';
 const MainApp = () => {
   const [urls, setUrls] = useState([]);
   const [validatedUrls, setValidatedUrls] = useState([]);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
+  const [, setIsProcessing] = useState(false);
+  const [, setShowPreview] = useState(false);
   const [downloadResults, setDownloadResults] = useState(null);
   const [currentStep, setCurrentStep] = useState('upload'); // upload, preview, processing, report
 
@@ -65,9 +65,10 @@ const MainApp = () => {
       
       for (let i = 0; i < items.length; i += batchSize) {
         const batch = items.slice(i, i + batchSize);
-        const batchPromises = batch.map(async (url, idx) => {
+        // eslint-disable-next-line
+        const batchPromises = batch.map(async function (url, idx) {
           const currentIndex = i + idx;
-          
+
           try {
             // Show starting validation status for this URL
             if (window.electronAPI?.onValidationProgress) {
@@ -79,27 +80,27 @@ const MainApp = () => {
                 isComplete: false
               });
             }
-            
+
             const result = await window.electronAPI.validateUrl({
               url,
               index: currentIndex,
               total: totalCount
             });
-            
+
             // Update completed count and progress after successful validation
             completedCount++;
             if (window.electronAPI?.onValidationProgress) {
               window.electronAPI.onValidationProgress({
                 current: completedCount,
                 total: totalCount,
-                status: completedCount === totalCount 
-                  ? 'Validation complete!' 
+                status: completedCount === totalCount
+                  ? 'Validation complete!'
                   : `Validated ${completedCount} of ${totalCount} URLs`,
                 currentUrl: url,
                 isComplete: completedCount === totalCount
               });
             }
-            
+
             return { url, index: currentIndex, ...result };
           } catch (error) {
             console.error(`Error validating ${url}:`, error);

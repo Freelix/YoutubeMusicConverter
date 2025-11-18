@@ -10,7 +10,7 @@ jobs:
     runs-on: windows-latest
     env:
       NODE_ENV: production
-      CI: ""
+      GH_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
     
     steps:
     - name: Checkout repository
@@ -27,15 +27,11 @@ jobs:
         npm ci
     
     - name: Build Windows app
-      run: |
-        # Set up GitHub token for electron-builder
-        $env:GH_TOKEN = "${{ secrets.DEPLOY_TOKEN }}"
-        
+      env:
+        GH_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+      run: |        
         # Build the React app
         npm run build:win
-        
-        # Package the Electron app using npx to use locally installed electron-builder
-        # npx electron-builder build --win --x64
     
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
