@@ -8,6 +8,8 @@ jobs:
   build-windows:
     name: Build Windows App
     runs-on: windows-latest
+    env:
+      CI: ""
     
     steps:
     - name: Checkout repository
@@ -24,8 +26,6 @@ jobs:
     
     - name: Build Windows app
       run: npm run build:win
-      env:
-        NODE_ENV: production
     
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
