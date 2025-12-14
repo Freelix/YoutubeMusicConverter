@@ -2,6 +2,7 @@
   "name": "youtube-music-converter",
   "version": "1.0.0",
   "description": "Desktop app to download and convert YouTube videos to MP3",
+  "homepage": "./",
   "main": "public/electron.js",
   "scripts": {
     "start": "react-scripts start",
