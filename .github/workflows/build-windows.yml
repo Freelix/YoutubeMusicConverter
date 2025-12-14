@@ -31,13 +31,23 @@ jobs:
       run: |
         # Run the same script used locally to produce Windows executables
         npm run build:win
-    
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
+
+    - name: Upload assets to release
+      uses: softprops/action-gh-release@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
       with:
-        name: windows-app
-        path: |
+        files: |
           dist/*.exe
           dist/*.msi
           dist/*.zip
-        if-no-files-found: error
+
+    # - name: Upload Artifact
+    #   uses: actions/upload-artifact@v4
+    #   with:
+    #     name: windows-app
+    #     path: |
+    #       dist/*.exe
+    #       dist/*.msi
+    #       dist/*.zip
+    #     if-no-files-found: error
