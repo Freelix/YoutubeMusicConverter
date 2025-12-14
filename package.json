@@ -26,6 +26,7 @@
       "build/**/*",
       "public/electron.js",
       "public/preload.js",
+      "src/services/musicbrainzService.js",
       "node_modules/**/*"
     ],
     "win": {
