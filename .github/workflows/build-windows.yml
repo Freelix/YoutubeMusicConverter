@@ -7,9 +7,8 @@ on:
 jobs:
   build-windows:
     name: Build Windows App
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     env:
-      NODE_ENV: production
       GH_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
     
     steps:
