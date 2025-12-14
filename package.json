@@ -23,6 +23,10 @@
     "directories": {
       "output": "dist"
     },
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**/*",
+      "node_modules/youtube-dl-exec/bin/**/*"
+    ],
     "files": [
       "build/**/*",
       "public/electron.js",
