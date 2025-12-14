@@ -26,9 +26,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: isDev 
-        ? path.join(__dirname, 'preload.js')
-        : path.join(process.resourcesPath, 'preload.js'),
+      preload: path.join(__dirname, 'preload.js'),
       webSecurity: !isDev
     },
     show: false,
