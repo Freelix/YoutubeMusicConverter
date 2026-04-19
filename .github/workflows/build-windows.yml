@@ -13,7 +13,7 @@ jobs:
     permissions:
       contents: write
     env:
-      GH_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
     steps:
     - name: Checkout repository
@@ -31,7 +31,7 @@ jobs:
     
     - name: Build Windows app
       env:
-        GH_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         npm run build:win
 
@@ -40,20 +40,14 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: windows-app
-        path: |
-          dist/*.exe
-          dist/*.msi
-          dist/*.zip
+        path: dist/*.exe
         if-no-files-found: error
 
     - name: Upload assets to release
       if: github.event_name == 'push'
       uses: softprops/action-gh-release@v2
       with:
-        token: ${{ secrets.DEPLOY_TOKEN }}
+        token: ${{ secrets.GITHUB_TOKEN }}
         name: ${{ github.ref_name }}
         body_path: RELEASE_NOTES.md
-        files: |
-          dist/*.exe
-          dist/*.msi
-          dist/*.zip
+        files: dist/*.exe
