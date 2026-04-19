@@ -2,17 +2,36 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const ffmpeg = require('fluent-ffmpeg');
-const ffmpegPath = require('ffmpeg-static');
+const ffmpegStatic = require('ffmpeg-static');
 const JSZip = require('jszip');
 const NodeID3 = require('node-id3');
 const axios = require('axios');
-const youtubedl = require('youtube-dl-exec');
+const { create: createYoutubeDl } = require('youtube-dl-exec');
 const { searchRecording } = require(path.join(__dirname, '../src/services/musicbrainzService'));
 
-// Set ffmpeg path
+// When the app is packaged, native binaries are extracted to app.asar.unpacked/.
+// We must rewrite the path so the OS can actually execute them.
+function fixAsarPath(p) {
+  if (app.isPackaged) {
+    return p.replace('app.asar', 'app.asar.unpacked');
+  }
+  return p;
+}
+
+const ffmpegPath = fixAsarPath(ffmpegStatic);
 if (ffmpegPath) {
   ffmpeg.setFfmpegPath(ffmpegPath);
 }
+
+// Resolve the yt-dlp binary that ships with youtube-dl-exec
+const ytdlpBinary = fixAsarPath(
+  path.join(
+    path.dirname(require.resolve('youtube-dl-exec/package.json')),
+    'bin',
+    process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
+  )
+);
+const youtubedl = createYoutubeDl(ytdlpBinary);
 
 let mainWindow;
 const isDev = process.env.ELECTRON_IS_DEV === '1';

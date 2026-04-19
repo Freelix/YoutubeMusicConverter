@@ -16,10 +16,7 @@ const invokeWithErrorHandling = async (method, ...args) => {
 };
 
 // Expose the API to the renderer process
-const { remote } = require('electron');
-
 contextBridge.exposeInMainWorld('electronAPI', {
-  getCurrentWindow: () => remote.getCurrentWindow(),
   validateUrl: (url) => invokeWithErrorHandling('validate-url', url),
   onValidationProgress: (callback) => {
     try {

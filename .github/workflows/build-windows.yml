@@ -3,6 +3,7 @@ name: Build Windows App on Release
 on:
   release:
     types: [created]
+  workflow_dispatch:
 
 jobs:
   build-windows:
@@ -29,10 +30,21 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
       run: |
-        # Run the same script used locally to produce Windows executables
         npm run build:win
 
+    - name: Upload artifact (for manual test runs)
+      if: github.event_name == 'workflow_dispatch'
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-app
+        path: |
+          dist/*.exe
+          dist/*.msi
+          dist/*.zip
+        if-no-files-found: error
+
     - name: Upload assets to release
+      if: github.event_name == 'release'
       uses: softprops/action-gh-release@v2
       env:
         GITHUB_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
@@ -41,13 +53,3 @@ jobs:
           dist/*.exe
           dist/*.msi
           dist/*.zip
-
-    # - name: Upload Artifact
-    #   uses: actions/upload-artifact@v4
-    #   with:
-    #     name: windows-app
-    #     path: |
-    #       dist/*.exe
-    #       dist/*.msi
-    #       dist/*.zip
-    #     if-no-files-found: error
