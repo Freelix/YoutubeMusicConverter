@@ -23,7 +23,7 @@ try {
 console.log('🔨 Building Windows executable...');
 try {
   // Build for Windows
-  execSync('npm run electron-pack -- --win --x64', { stdio: 'inherit' });
+  execSync('npm run electron-pack -- --win --x64 --publish never', { stdio: 'inherit' });
   
   console.log('✅ Build completed successfully!');
   console.log('📦 The Windows installer can be found in the dist/ directory');
