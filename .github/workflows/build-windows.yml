@@ -50,6 +50,8 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
       with:
+        name: ${{ github.ref_name }}
+        body_path: RELEASE_NOTES.md
         files: |
           dist/*.exe
           dist/*.msi
