@@ -1,8 +1,9 @@
 name: Build Windows App on Release
 
 on:
-  release:
-    types: [created]
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 jobs:
@@ -44,7 +45,7 @@ jobs:
         if-no-files-found: error
 
     - name: Upload assets to release
-      if: github.event_name == 'release'
+      if: github.event_name == 'push'
       uses: softprops/action-gh-release@v2
       env:
         GITHUB_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
