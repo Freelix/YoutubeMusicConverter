@@ -10,6 +10,8 @@ jobs:
   build-windows:
     name: Build Windows App
     runs-on: windows-latest
+    permissions:
+      contents: write
     env:
       GH_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
     
@@ -47,9 +49,8 @@ jobs:
     - name: Upload assets to release
       if: github.event_name == 'push'
       uses: softprops/action-gh-release@v2
-      env:
-        GITHUB_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
       with:
+        token: ${{ secrets.DEPLOY_TOKEN }}
         name: ${{ github.ref_name }}
         body_path: RELEASE_NOTES.md
         files: |
