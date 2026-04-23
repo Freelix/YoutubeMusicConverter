@@ -118,7 +118,6 @@ ipcMain.handle('validate-url', async (event, { url, index, total }) => {
       const info = await youtubedl(url, {
         dumpSingleJson: true,
         noWarnings: true,
-        noCallHome: true,
         noCheckCertificate: true,
         preferFreeFormats: true,
         youtubeSkipDashManifest: true,
@@ -164,7 +163,6 @@ ipcMain.handle('download-video', async (event, { url, index, total }) => {
     const info = await youtubedl(url, {
       dumpSingleJson: true,
       noWarnings: true,
-      noCallHome: true,
       noCheckCertificate: true
     });
     
@@ -201,9 +199,9 @@ ipcMain.handle('download-video', async (event, { url, index, total }) => {
       audioQuality: 0,
       output: outputPath,
       noWarnings: true,
-      noCallHome: true,
       noCheckCertificate: true,
       preferFreeFormats: true,
+      ffmpegLocation: ffmpegPath,
       referer: url,
       addHeader: [
         'referer:youtube.com',
