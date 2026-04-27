@@ -33,6 +33,99 @@ const ytdlpBinary = fixAsarPath(
 );
 const youtubedl = createYoutubeDl(ytdlpBinary);
 
+// --- Rate-limited queue for yt-dlp calls ---
+// Serializes all yt-dlp invocations and enforces a minimum delay between them
+// to avoid triggering YouTube's bot detection.
+const YTDLP_DELAY_MS = 2000;
+
+class RateLimitedQueue {
+  constructor(delayMs) {
+    this.delayMs = delayMs;
+    this.running = false;
+    this.queue = [];
+    this.lastFinishTime = 0;
+  }
+
+  run(fn) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ fn, resolve, reject });
+      this._next();
+    });
+  }
+
+  async _next() {
+    if (this.running || this.queue.length === 0) return;
+    this.running = true;
+    const { fn, resolve, reject } = this.queue.shift();
+
+    const wait = this.delayMs - (Date.now() - this.lastFinishTime);
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+
+    try {
+      resolve(await fn());
+    } catch (err) {
+      reject(err);
+    } finally {
+      this.lastFinishTime = Date.now();
+      this.running = false;
+      this._next();
+    }
+  }
+}
+
+const ytdlpQueue = new RateLimitedQueue(YTDLP_DELAY_MS);
+
+// --- Cookie-aware yt-dlp wrapper ---
+// Tries browsers in order to pass cookies; caches the first working one.
+const BROWSER_ORDER = process.platform === 'win32'
+  ? ['chrome', 'edge', 'firefox']
+  : process.platform === 'darwin'
+  ? ['chrome', 'firefox']
+  : ['chrome', 'firefox'];
+
+// undefined = not yet resolved; false = no browser found; string = browser name
+let cachedBrowser = undefined;
+
+function isBrowserNotFoundError(err) {
+  const msg = (err.message || '').toLowerCase();
+  return (
+    msg.includes('could not find') ||
+    msg.includes('no such browser') ||
+    msg.includes('browser not found') ||
+    msg.includes('unsupported browser')
+  );
+}
+
+async function youtubedlWithCookies(url, options) {
+  if (cachedBrowser !== undefined) {
+    const opts = cachedBrowser
+      ? { ...options, cookiesFromBrowser: cachedBrowser }
+      : options;
+    return youtubedl(url, opts);
+  }
+
+  for (const browser of BROWSER_ORDER) {
+    try {
+      const result = await youtubedl(url, { ...options, cookiesFromBrowser: browser });
+      cachedBrowser = browser;
+      console.log(`[yt-dlp] Using ${browser} cookies`);
+      return result;
+    } catch (err) {
+      if (isBrowserNotFoundError(err)) {
+        console.log(`[yt-dlp] Browser ${browser} not found, trying next...`);
+        continue;
+      }
+      // Browser IS available but the request failed for another reason — cache and propagate
+      cachedBrowser = browser;
+      throw err;
+    }
+  }
+
+  console.log('[yt-dlp] No browser found for cookies, proceeding without');
+  cachedBrowser = false;
+  return youtubedl(url, options);
+}
+
 let mainWindow;
 const isDev = process.env.ELECTRON_IS_DEV === '1';
 
@@ -94,51 +187,63 @@ if (!fs.existsSync(tempDir)) {
 // Validate YouTube URL
 ipcMain.handle('validate-url', async (event, { url, index, total }) => {
   console.log(`Validating URL ${index + 1}/${total}:`, url);
-  
-  // Emit progress update
-  const mainWindow = BrowserWindow.getFocusedWindow();
-  if (mainWindow) {
-    mainWindow.webContents.send('validation-progress', {
-      current: index + 1,
+
+  const win = BrowserWindow.getFocusedWindow();
+
+  // Notify the UI that this URL is now being checked (before queue wait)
+  if (win) {
+    win.webContents.send('validation-progress', {
       total,
-      status: `Validating URL ${index + 1} of ${total}`,
-      currentUrl: url
+      status: `Checking URL ${index + 1} of ${total}...`,
+      currentUrl: url,
     });
   }
-  
+
+  const sendResult = (current, status, title = '', author = '') => {
+    if (win) {
+      win.webContents.send('validation-progress', { current, total, status, currentUrl: url, currentTitle: title, currentAuthor: author });
+    }
+  };
+
   try {
-    // Basic URL validation
     if (!url || !url.includes('youtube.com/watch')) {
       console.log('Invalid YouTube URL format');
+      sendResult(index + 1, `Skipped URL ${index + 1} of ${total}: invalid format`);
       return { valid: false, error: 'Please enter a valid YouTube URL' };
     }
 
     console.log('Fetching video info with youtube-dl-exec...');
     try {
-      const info = await youtubedl(url, {
+      const info = await ytdlpQueue.run(() => youtubedlWithCookies(url, {
         dumpSingleJson: true,
         noWarnings: true,
         noCheckCertificate: true,
         preferFreeFormats: true,
         youtubeSkipDashManifest: true,
         referer: url
-      });
+      }));
       
       if (!info) {
         console.log('No video details found');
+        sendResult(index + 1, `Failed to fetch URL ${index + 1} of ${total}`);
         return { valid: false, error: 'Could not fetch video information' };
       }
-      
+
+      const title = info.title || 'Unknown Title';
+      const author = info.uploader || 'Unknown Author';
+
       console.log('Successfully fetched video info');
+      sendResult(index + 1, `Validating ${index + 1} of ${total}`, title, author);
       return {
         valid: true,
-        title: info.title || 'Unknown Title',
-        author: info.uploader || 'Unknown Author',
+        title,
+        author,
         thumbnail: info.thumbnail || '',
         duration: info.duration || 0,
       };
     } catch (error) {
       console.error('Error fetching video info:', error);
+      sendResult(index + 1, `Error on URL ${index + 1} of ${total}`);
       return { 
         valid: false, 
         error: `Failed to fetch video info: ${error.message}`
@@ -154,25 +259,33 @@ ipcMain.handle('validate-url', async (event, { url, index, total }) => {
 });
 
 // Download and convert video
-ipcMain.handle('download-video', async (event, { url, index, total }) => {
+ipcMain.handle('download-video', async (event, { url, index, total, cachedInfo }) => {
   const videoId = url.match(/(?:v=|youtu\.be\/)([^&\n?#]+)/)?.[1] || 'video';
   const outputPath = path.join(tempDir, `${videoId}.mp3`);
   
   try {
-    // Get video info first
-    const info = await youtubedl(url, {
-      dumpSingleJson: true,
-      noWarnings: true,
-      noCheckCertificate: true
-    });
-    
-    if (!info) {
-      throw new Error('Could not fetch video information');
+    let title, author, thumbnailUrl;
+
+    if (cachedInfo) {
+      // Reuse metadata already fetched during the validation step
+      title = cachedInfo.title;
+      author = cachedInfo.author;
+      thumbnailUrl = cachedInfo.thumbnail;
+    } else {
+      const info = await ytdlpQueue.run(() => youtubedlWithCookies(url, {
+        dumpSingleJson: true,
+        noWarnings: true,
+        noCheckCertificate: true
+      }));
+
+      if (!info) {
+        throw new Error('Could not fetch video information');
+      }
+
+      title = info.title || 'Unknown Title';
+      author = info.uploader || 'Unknown Author';
+      thumbnailUrl = info.thumbnail || '';
     }
-    
-    const title = info.title || 'Unknown Title';
-    const author = info.uploader || 'Unknown Author';
-    const thumbnailUrl = info.thumbnail || '';
     
     // Download thumbnail
     let thumbnailBuffer = null;
@@ -193,7 +306,7 @@ ipcMain.handle('download-video', async (event, { url, index, total }) => {
     console.log(`Starting download of ${url} to ${outputPath}`);
     
     // Download and convert the video
-    await youtubedl(url, {
+    await ytdlpQueue.run(() => youtubedlWithCookies(url, {
       extractAudio: true,
       audioFormat: 'mp3',
       audioQuality: 0,
@@ -207,7 +320,7 @@ ipcMain.handle('download-video', async (event, { url, index, total }) => {
         'referer:youtube.com',
         'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
       ]
-    });
+    }));
     
     // Add metadata
     if (fs.existsSync(outputPath)) {

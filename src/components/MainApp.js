@@ -37,70 +37,22 @@ const MainApp = () => {
     setShowPreview(false);
 
     console.log('Starting URL validation for', urls.length, 'URLs');
-    
-    // Set up validation progress handler
-    let validationProgressCallbackId = null;
-    if (window.electronAPI?.onValidationProgress) {
-      validationProgressCallbackId = window.electronAPI.onValidationProgress(console.log);
-    }
 
-    // Track completed validations
-    let completedCount = 0;
-    const totalCount = urls.length;
-    
     // Process URLs in parallel with concurrency control
     const processInBatches = async (items, batchSize = 5) => {
       const results = [];
-      
-      // Initial progress update
-      if (window.electronAPI?.onValidationProgress) {
-        window.electronAPI.onValidationProgress({
-          current: 0,
-          total: totalCount,
-          status: `Starting validation of ${totalCount} URLs`,
-          currentUrl: '',
-          isComplete: false
-        });
-      }
-      
+
       for (let i = 0; i < items.length; i += batchSize) {
         const batch = items.slice(i, i + batchSize);
         // eslint-disable-next-line
-        const batchPromises = batch.map(async function (url, idx) {
+        const batchPromises = batch.map(async (url, idx) => {
           const currentIndex = i + idx;
-
           try {
-            // Show starting validation status for this URL
-            if (window.electronAPI?.onValidationProgress) {
-              window.electronAPI.onValidationProgress({
-                current: completedCount,
-                total: totalCount,
-                status: `Validating URL ${currentIndex + 1} of ${totalCount}`,
-                currentUrl: url,
-                isComplete: false
-              });
-            }
-
             const result = await window.electronAPI.validateUrl({
               url,
               index: currentIndex,
-              total: totalCount
+              total: urls.length,
             });
-
-            // Update completed count and progress after successful validation
-            completedCount++;
-            if (window.electronAPI?.onValidationProgress) {
-              window.electronAPI.onValidationProgress({
-                current: completedCount,
-                total: totalCount,
-                status: completedCount === totalCount
-                  ? 'Validation complete!'
-                  : `Validated ${completedCount} of ${totalCount} URLs`,
-                currentUrl: url,
-                isComplete: completedCount === totalCount
-              });
-            }
-
             return { url, index: currentIndex, ...result };
           } catch (error) {
             console.error(`Error validating ${url}:`, error);
@@ -108,16 +60,16 @@ const MainApp = () => {
               url,
               index: currentIndex,
               valid: false,
-              error: error.message || 'Unknown error during validation'
+              error: error.message || 'Unknown error during validation',
             };
           }
         });
-        
+
         // Wait for all promises in the current batch to complete
         const batchResults = await Promise.all(batchPromises);
         results.push(...batchResults);
       }
-      
+
       return results.sort((a, b) => a.index - b.index);
     };
     
@@ -135,6 +87,11 @@ const MainApp = () => {
         url: result.url,
         index: result.index,
         total: validResults.length,
+        cachedInfo: {
+          title: result.title,
+          author: result.author,
+          thumbnail: result.thumbnail,
+        },
       })
     );
 
@@ -181,11 +138,6 @@ const MainApp = () => {
       zipPath,
     });
 
-    // Clean up validation progress listener
-    if (validationProgressCallbackId && window.electronAPI && window.electronAPI.removeValidationProgressListener) {
-      window.electronAPI.removeValidationProgressListener(validationProgressCallbackId);
-    }
-    
     setIsProcessing(false);
     setCurrentStep('report');
   }, [urls]);

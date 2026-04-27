@@ -47,6 +47,55 @@
   margin-bottom: 12px;
 }
 
+.current-track {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #f7fafc 100%);
+  padding: 14px 16px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  border-left: 4px solid #4CAF50;
+  overflow: hidden;
+  animation: fadeInSlide 0.3s ease;
+}
+
+.current-track-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #4CAF50;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 6px;
+}
+
+.track-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track-author {
+  font-size: 13px;
+  color: #718096;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes fadeInSlide {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 .current-url {
   font-size: 13px;
   color: #4a5568;
@@ -249,3 +298,27 @@
   text-align: right;
 }
 
+@media (max-width: 600px) {
+  .progress-card {
+    padding: 20px 16px;
+    border-radius: 8px;
+  }
+
+  .validation-progress {
+    max-width: 100%;
+  }
+
+  .validating-message {
+    padding: 20px 8px;
+  }
+
+  .video-thumbnail {
+    width: 80px;
+    min-width: 80px;
+    height: 45px;
+  }
+
+  .track-title {
+    font-size: 14px;
+  }
+}

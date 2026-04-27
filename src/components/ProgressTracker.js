@@ -20,7 +20,9 @@ const ProgressTracker = ({ totalUrls, validatedUrls }) => {
     current: 0,
     total: totalUrls,
     status: 'Waiting to start...',
-    currentUrl: ''
+    currentUrl: '',
+    currentTitle: '',
+    currentAuthor: '',
   });
   const [overallProgress, setOverallProgress] = useState(0);
   const [completedCount, setCompletedCount] = useState(0);
@@ -44,12 +46,15 @@ const ProgressTracker = ({ totalUrls, validatedUrls }) => {
     };
 
     const handleValidationProgress = (data) => {
-      setValidationProgress({
-        current: data.current || 0,
-        total: data.total || totalUrls,
-        status: data.status || 'Validating...',
-        currentUrl: data.currentUrl || ''
-      });
+      setValidationProgress((prev) => ({
+        ...prev,
+        ...(data.current !== undefined && { current: data.current }),
+        ...(data.total !== undefined && { total: data.total }),
+        status: data.status || prev.status,
+        currentUrl: data.currentUrl !== undefined ? data.currentUrl : prev.currentUrl,
+        currentTitle: data.currentTitle !== undefined ? data.currentTitle : prev.currentTitle,
+        currentAuthor: data.currentAuthor !== undefined ? data.currentAuthor : prev.currentAuthor,
+      }));
     };
 
     window.electronAPI.onVideoProgress(handleVideoProgress);
@@ -92,12 +97,27 @@ const ProgressTracker = ({ totalUrls, validatedUrls }) => {
             <div className="loader-spinner"></div>
             <div className="validation-progress">
               <p className="validation-status">{validationProgress.status}</p>
-              {validationProgress.currentUrl && (
-                <p className="current-url">
-                  {validationProgress.currentUrl.length > 50 
-                    ? `${validationProgress.currentUrl.substring(0, 47)}...`
-                    : validationProgress.currentUrl}
-                </p>
+              {validationProgress.currentTitle ? (
+                <div className="current-track">
+                  <div className="current-track-label">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/>
+                    </svg>
+                    Now validating
+                  </div>
+                  <p className="track-title">{validationProgress.currentTitle}</p>
+                  {validationProgress.currentAuthor && (
+                    <p className="track-author">{validationProgress.currentAuthor}</p>
+                  )}
+                </div>
+              ) : (
+                validationProgress.currentUrl && (
+                  <p className="current-url">
+                    {validationProgress.currentUrl.length > 50
+                      ? `${validationProgress.currentUrl.substring(0, 47)}...`
+                      : validationProgress.currentUrl}
+                  </p>
+                )
               )}
               <div className="progress-bar-container">
                 <div 
