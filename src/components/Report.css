@@ -132,6 +132,58 @@
   margin-bottom: 16px;
 }
 
+.report-failed-file {
+  padding: 20px 24px;
+  background: #fff8f0;
+  border: 1px solid #f6d860;
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+
+.failed-file-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #b45309;
+  margin-bottom: 8px;
+}
+
+.failed-file-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.failed-file-subtitle {
+  font-size: 14px;
+  color: #78350f;
+  margin-bottom: 10px;
+}
+
+.failed-file-path {
+  font-size: 12px;
+  color: #92400e;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  background: #fef3c7;
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin-bottom: 14px;
+  word-break: break-all;
+}
+
+.btn-outline-error {
+  background: transparent;
+  border: 1.5px solid #b45309;
+  color: #b45309;
+  padding: 8px 18px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.btn-outline-error:hover {
+  background: #b45309;
+  color: white;
+}
+
 .report-actions {
   display: flex;
   justify-content: center;

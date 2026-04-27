@@ -96,6 +96,22 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
+.validation-counts {
+  display: flex;
+  gap: 16px;
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.count-success {
+  color: #4CAF50;
+}
+
+.count-error {
+  color: #e53e3e;
+}
+
 .current-url {
   font-size: 13px;
   color: #4a5568;

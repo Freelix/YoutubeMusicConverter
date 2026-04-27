@@ -36,7 +36,7 @@ const youtubedl = createYoutubeDl(ytdlpBinary);
 // --- Rate-limited queue for yt-dlp calls ---
 // Serializes all yt-dlp invocations and enforces a minimum delay between them
 // to avoid triggering YouTube's bot detection.
-const YTDLP_DELAY_MS = 2000;
+const YTDLP_DELAY_MS = 500;
 
 class RateLimitedQueue {
   constructor(delayMs) {
@@ -185,22 +185,13 @@ if (!fs.existsSync(tempDir)) {
 }
 
 // Validate YouTube URL
-ipcMain.handle('validate-url', async (event, { url, index, total }) => {
+ipcMain.handle('validate-url', async (event, { url, index, total, silent = false }) => {
   console.log(`Validating URL ${index + 1}/${total}:`, url);
 
   const win = BrowserWindow.getFocusedWindow();
 
-  // Notify the UI that this URL is now being checked (before queue wait)
-  if (win) {
-    win.webContents.send('validation-progress', {
-      total,
-      status: `Checking URL ${index + 1} of ${total}...`,
-      currentUrl: url,
-    });
-  }
-
   const sendResult = (current, status, title = '', author = '') => {
-    if (win) {
+    if (win && !silent) {
       win.webContents.send('validation-progress', { current, total, status, currentUrl: url, currentTitle: title, currentAuthor: author });
     }
   };
@@ -435,6 +426,17 @@ ipcMain.handle('create-zip', async (event, files) => {
     }
     
     return { success: true, path: zipPath };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Write failed URLs to a text file
+ipcMain.handle('write-failed-urls', async (event, urls) => {
+  try {
+    const filePath = path.join(downloadsDir, `failed-urls-${Date.now()}.txt`);
+    fs.writeFileSync(filePath, urls.join('\n') + '\n', 'utf8');
+    return { success: true, path: filePath };
   } catch (error) {
     return { success: false, error: error.message };
   }

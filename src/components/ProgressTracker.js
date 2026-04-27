@@ -26,6 +26,8 @@ const ProgressTracker = ({ totalUrls, validatedUrls }) => {
   });
   const [overallProgress, setOverallProgress] = useState(0);
   const [completedCount, setCompletedCount] = useState(0);
+  const [validatedCount, setValidatedCount] = useState(0);
+  const [errorCount, setErrorCount] = useState(0);
 
   useEffect(() => {
     if (!window.electronAPI) return;
@@ -55,6 +57,14 @@ const ProgressTracker = ({ totalUrls, validatedUrls }) => {
         currentTitle: data.currentTitle !== undefined ? data.currentTitle : prev.currentTitle,
         currentAuthor: data.currentAuthor !== undefined ? data.currentAuthor : prev.currentAuthor,
       }));
+
+      if (data.current !== undefined) {
+        if (data.currentTitle) {
+          setValidatedCount((c) => c + 1);
+        } else {
+          setErrorCount((c) => c + 1);
+        }
+      }
     };
 
     window.electronAPI.onVideoProgress(handleVideoProgress);
@@ -128,9 +138,20 @@ const ProgressTracker = ({ totalUrls, validatedUrls }) => {
                   }}
                 />
               </div>
-              <p className="progress-text">
-                {validationProgress.current} of {validationProgress.total} URLs validated
-              </p>
+              {(validatedCount > 0 || errorCount > 0) && (
+                <div className="validation-counts">
+                  {validatedCount > 0 && (
+                    <span className="count-success">
+                      ✓ {validatedCount} validated
+                    </span>
+                  )}
+                  {errorCount > 0 && (
+                    <span className="count-error">
+                      ✗ {errorCount} error{errorCount > 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         ) : (

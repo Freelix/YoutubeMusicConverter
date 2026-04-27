@@ -122,6 +122,33 @@ const MainApp = () => {
       }
     });
 
+    // Retry all failed URLs once before giving up
+    let failedUrlsPath = null;
+    if (failedDownloads.length > 0) {
+      const retryResults = await Promise.allSettled(
+        failedDownloads.map((f, i) =>
+          window.electronAPI.validateUrl({
+            url: f.url,
+            index: i,
+            total: failedDownloads.length,
+            silent: true,
+          })
+        )
+      );
+
+      const stillFailing = failedDownloads
+        .filter((_, i) => {
+          const r = retryResults[i];
+          return r.status === 'rejected' || !r.value?.valid;
+        })
+        .map((f) => f.url);
+
+      if (stillFailing.length > 0) {
+        const writeResult = await window.electronAPI.writeFailedUrls(stillFailing);
+        if (writeResult.success) failedUrlsPath = writeResult.path;
+      }
+    }
+
     // Create ZIP if there are successful downloads
     let zipPath = null;
     if (successfulDownloads.length > 0) {
@@ -136,6 +163,7 @@ const MainApp = () => {
       failed: failedDownloads.length,
       failedUrls: failedDownloads,
       zipPath,
+      failedUrlsPath,
     });
 
     setIsProcessing(false);

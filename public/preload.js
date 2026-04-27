@@ -64,6 +64,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   downloadVideo: (data) => invokeWithErrorHandling('download-video', data),
   createZip: (files) => invokeWithErrorHandling('create-zip', files),
+  writeFailedUrls: (urls) => invokeWithErrorHandling('write-failed-urls', urls),
   cleanup: () => invokeWithErrorHandling('cleanup'),
   showSaveDialog: () => invokeWithErrorHandling('show-save-dialog'),
   showItemInFolder: (filePath) => invokeWithErrorHandling('show-item-in-folder', filePath),
