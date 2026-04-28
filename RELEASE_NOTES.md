@@ -1,5 +1,25 @@
 # Release Notes
 
+## v0.6.0 — April 28, 2026
+
+### What's New in v0.6.0
+
+#### ⚡ Performance
+- **Eliminated duplicate `yt-dlp` calls** — Metadata fetched during URL validation (title, artist, thumbnail) is now passed directly to the download step via a `cachedInfo` field, removing a redundant `--dump-single-json` call per URL. For a 10-URL batch this halves the number of `yt-dlp` invocations.
+- **Reduced rate-limit delay** — The minimum delay between consecutive `yt-dlp` calls was reduced from 2000 ms to 500 ms. Combined with the above, total validation overhead is roughly 4× faster for typical batch sizes.
+
+#### ✨ Improvements
+- **Live validation progress** — The progress UI now updates after each individual URL is validated (not once per batch of 5). Each update shows the video **title** and **artist** in a styled card with a music note icon, title on its own line, and artist below it. A smooth fade-in animation plays on each new card.
+- **Validation counters** — A live `✓ N validated / ✗ N errors` counter is displayed below the validation progress bar, updating in real time.
+- **Consistent status label** — Status now reads `Validating X of N` throughout (previously it flickered between `Checking URL…` and `Validated X of N` due to competing pre- and post-event messages).
+- **Retry on failure + export** — After all processing completes, any failed URLs are silently re-validated once. URLs that still fail are written to a `failed-urls-<timestamp>.txt` file (one URL per line) in the downloads folder. The Report screen shows an amber card with the file path and a **Show File** button to reveal it in Finder / Explorer.
+
+#### 🐛 Bug Fixes
+- **Removed dead progress callbacks in `MainApp.js`** — Several calls to `onValidationProgress()` were passing data objects instead of callback functions, registering useless IPC listeners that accumulated silently. These have been removed.
+- **Progress bar no longer jumps by batch size** — Previously, sending progress events before the `yt-dlp` queue call caused all 5 URLs in a batch to register as "in progress" simultaneously, making the bar jump in steps of 5. Progress now only advances when a URL finishes.
+
+---
+
 ## v0.5.0 — April 18, 2026
 
 ### About This Project
