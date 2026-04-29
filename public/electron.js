@@ -119,7 +119,16 @@ async function youtubedlWithCookies(url, options) {
     const opts = cachedBrowser
       ? { ...options, cookiesFromBrowser: cachedBrowser }
       : options;
-    return youtubedl(url, opts);
+    try {
+      return await youtubedl(url, opts);
+    } catch (err) {
+      if (cachedBrowser && (isCookieExtractionError(err) || isBrowserNotFoundError(err))) {
+        console.warn(`[yt-dlp] Cached browser "${cachedBrowser}" failed (${err.message}), resetting cache...`);
+        cachedBrowser = undefined;
+        return youtubedlWithCookies(url, options);
+      }
+      throw err;
+    }
   }
 
   for (const browser of BROWSER_ORDER) {
@@ -158,7 +167,7 @@ function createWindow() {
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#667eea',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

@@ -1,5 +1,20 @@
 # Release Notes
 
+## v0.6.3 — April 28, 2026
+
+### What's New in v0.6.3
+
+#### 🐛 Bug Fixes
+
+- **Fixed white screen flicker on app startup (Windows)** — Three compounding causes addressed:
+  1. The `BrowserWindow` `backgroundColor` was `#f5f5f5` (grey), mismatching the splash screen's purple gradient. The native window now uses `#667eea` (the gradient's start colour), so even the brief moment before React loads is visually seamless.
+  2. `index.html` had no body background colour — before `index.css` was parsed the page was white. An inline `<style>` now sets `body { background-color: #667eea }` as an immediate fallback.
+  3. The `SplashScreen → MainApp` switch was an abrupt React unmount/mount: the full-viewport purple gradient disappeared instantly, revealing a grey container before its header gradient painted. The transition is now a CSS `opacity` cross-fade — SplashScreen begins fading at 1.5 s and completes at 2 s, during which MainApp is already rendered behind it (invisible, `pointer-events: none`) and fades in simultaneously.
+
+- **Fixed downloads still failing on Windows after v0.6.2** — v0.6.2 added cookie-error recovery in the browser *discovery loop* (when `cachedBrowser` is `undefined`) but the *fast path* (when a browser is already cached) had no error handling at all. If Chrome opened between the URL validation phase and the download phase — acquiring an exclusive lock on its SQLite cookie database — every download call hit the fast path, received `"database is locked"`, and threw directly with no fallback. The fast path now wraps the `youtubedl()` call in a `try/catch`; on any cookie or browser error it resets `cachedBrowser = undefined` and re-runs the full discovery loop, eventually falling back to no-cookie mode so downloads of public videos still succeed.
+
+---
+
 ## v0.6.2 — April 28, 2026
 
 ### What's New in v0.6.2

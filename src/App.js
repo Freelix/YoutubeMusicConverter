@@ -4,19 +4,24 @@ import MainApp from './components/MainApp';
 import './App.css';
 
 function App() {
+  const [splashFading, setSplashFading] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setShowSplash(false);
-    }, 2000);
-
-    return () => clearTimeout(timer);
+    const fadeTimer = setTimeout(() => setSplashFading(true), 1500);
+    const hideTimer = setTimeout(() => setShowSplash(false), 2000);
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(hideTimer);
+    };
   }, []);
 
   return (
     <div className="App">
-      {showSplash ? <SplashScreen /> : <MainApp />}
+      {showSplash && <SplashScreen fading={splashFading} />}
+      <div className={`main-app-wrapper ${showSplash ? 'hidden' : 'visible'}`}>
+        <MainApp />
+      </div>
     </div>
   );
 }
