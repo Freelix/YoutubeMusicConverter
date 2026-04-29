@@ -1,5 +1,27 @@
 # Release Notes
 
+## v0.6.1 — April 28, 2026
+
+### What's New in v0.6.1
+
+#### 🎵 Enhanced MP3 Metadata Accuracy
+- **Deezer as primary metadata source** — The app now queries the free Deezer search API (no authentication required) before falling back to MusicBrainz. Deezer returns clean, structured data — title, artist, album, duration, and cover art — in a single API call, with much better coverage for mainstream music.
+- **Deezer cover art** — When a Deezer match is found, the album cover image (250×250) is embedded in the MP3 instead of the YouTube video thumbnail. MIME type is detected from the HTTP response headers rather than assumed.
+- **Multi-candidate scoring engine** (`metadataScorer.js`) — All metadata sources now fetch up to 5 candidates and rank them using a weighted score: track title similarity (50%), artist similarity (35%), and duration delta (15%). The best candidate is accepted only if its overall score ≥ 0.65 **and** its title similarity ≥ 0.40, preventing mismatches.
+- **Fixed `extractArtistAndTrack` bug** — The previous implementation stripped everything after `-` from the title *before* running pattern matching, meaning `"Dua Lipa - Levitating (Official Video)"` would never parse correctly. The function now splits on the separator first on the raw title and strips noise (parentheses, brackets) from each part individually afterwards.
+- **Improved MusicBrainz lookup** — Now fetches up to 5 candidates (was 1) and delegates scoring to the shared engine. The second sequential API call for release info has been eliminated — release data is extracted from the recording search response directly, halving MusicBrainz latency per track.
+- **Fallback when parsing fails** — Previously, if the title couldn't be split into artist/track, the lookup was skipped entirely. The enrichment pipeline now falls back to the raw YouTube title and uploader name as the search query, giving both Deezer and MusicBrainz a chance to still find a match.
+- **Duration passed through `cachedInfo`** — The duration returned by `yt-dlp` during URL validation is now forwarded to the download step, making duration-based scoring work correctly in the common fast path (no re-fetch needed).
+
+#### ⚡ Audio Quality
+- **Explicit 320 kbps bitrate** — Added `postprocessorArgs: 'ffmpeg:-b:a 320k'` to the yt-dlp download call. This ensures the output MP3 is always encoded at exactly 320 kbps — the maximum standard MP3 bitrate — regardless of yt-dlp's internal quality defaults.
+
+#### 🔧 Internal / Packaging
+- **New service files** — `src/services/deezerService.js`, `src/services/metadataScorer.js`, and `src/services/metadataService.js` added as a clean, layered architecture.
+- **Packaged build fix** — `package.json` build files glob updated from `src/services/musicbrainzService.js` to `src/services/**/*.js`, ensuring all service files are included in the packaged Electron app.
+
+---
+
 ## v0.6.0 — April 28, 2026
 
 ### What's New in v0.6.0
