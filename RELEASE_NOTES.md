@@ -1,5 +1,21 @@
 # Release Notes
 
+## v0.6.2 — April 28, 2026
+
+### What's New in v0.6.2
+
+#### 🐛 Bug Fixes
+
+- **Fixed screen flicker on Windows when opening the file picker** — Clicking "Browse Files" previously caused the app window to flash white one or more times. The root cause was a hidden `<input type="file">` being clicked programmatically, which forces Chromium to briefly lose focus when the OS dialog opens. The file picker is now implemented using Electron's native `dialog.showOpenDialog` via IPC, which avoids the focus-loss cycle entirely. A `backgroundColor` matching the app's background (`#f5f5f5`) is also now set on the `BrowserWindow` so any residual repaint is invisible rather than white.
+
+- **Fixed downloads failing on every video on Windows** — When Chrome (or another browser) is installed but its cookie database cannot be read — for example because Chrome is already running and holds an exclusive lock on its SQLite file, or because Windows DPAPI decryption fails — `yt-dlp` raised an error that the app did not recognise as a recoverable one. The code was caching the broken browser as the active source and re-throwing the error, causing every single download in the session to fail. A new `isCookieExtractionError()` check now detects these Windows-specific failures (`"database is locked"`, `"unable to decrypt"`, `"CryptUnprotectData"`, etc.) and falls through to the next browser in the priority order (`chrome → edge → firefox`). If all browsers fail for cookie-related reasons, the app proceeds without cookies — downloads can still succeed for public videos.
+
+#### 🔧 Internal / Packaging
+
+- **Windows build now produces only the NSIS installer** — The build previously generated two separate EXE files: an NSIS installer and a portable standalone EXE. Both ran the identical Electron application at runtime, so there was no performance difference between them. The NSIS installer provides a marginally faster startup (binaries are permanently extracted to the installation directory) and offers a proper uninstaller and Start Menu shortcuts. The `portable` target has been removed from `package.json`; the Windows build now outputs a single NSIS installer EXE.
+
+---
+
 ## v0.6.1 — April 28, 2026
 
 ### What's New in v0.6.1
