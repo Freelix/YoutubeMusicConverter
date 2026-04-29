@@ -303,6 +303,7 @@ ipcMain.handle('download-video', async (event, { url, index, total, cachedInfo }
       extractAudio: true,
       audioFormat: 'mp3',
       audioQuality: 0,
+      postprocessorArgs: 'ffmpeg:-b:a 320k',
       output: outputPath,
       noWarnings: true,
       noCheckCertificate: true,
