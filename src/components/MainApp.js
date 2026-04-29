@@ -88,9 +88,10 @@ const MainApp = () => {
         index: result.index,
         total: validResults.length,
         cachedInfo: {
-          title: result.title,
-          author: result.author,
+          title:     result.title,
+          author:    result.author,
           thumbnail: result.thumbnail,
+          duration:  result.duration || 0,
         },
       })
     );

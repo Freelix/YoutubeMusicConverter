@@ -1,179 +1,119 @@
 const axios = require('axios');
-const stringSimilarity = require('string-similarity');
+const { scoreCandidates, pickBest } = require('./metadataScorer');
 
-// MusicBrainz API configuration
 const MB_API_URL = 'https://musicbrainz.org/ws/2';
 const USER_AGENT = 'YoutubeMusicConverter/1.0.0 ( your-email@example.com )';
 
-// Minimum similarity score (0-1) to consider a match
-const MIN_SIMILARITY_SCORE = 0.85;
-
 /**
- * Calculate similarity between two strings (0-1)
+ * Extract artist and track from a YouTube video title.
+ * Splits on separator characters BEFORE stripping noise,
+ * which fixes titles like "Artist - Song (Official Video)".
  */
-function calculateSimilarity(str1, str2) {
-  if (!str1 || !str2) return 0;
-  return stringSimilarity.compareTwoStrings(
-    str1.toLowerCase(),
-    str2.toLowerCase()
-  );
-}
+function extractArtistAndTrack(rawTitle) {
+  const stripNoise = (s) =>
+    s.replace(/\s*[\(\[\{][^\)\]\}]*[\)\]\}]/g, '').replace(/\s+/g, ' ').trim();
 
-/**
- * Clean up YouTube video title to extract artist and track name
- * @param {string} title - YouTube video title
- * @returns {Object} - Object with artist and track name
- */
-function extractArtistAndTrack(title) {
-  // Common patterns in YouTube video titles
-  const patterns = [
-    // Pattern: Artist - Track (Official Video)
-    /^([^-]+?)\s*-\s*([^(\[]+)/,
-    // Pattern: Artist "Track"
-    /^([^"]+?)\s*["'](.+?)["']/,
-    // Pattern: Track by Artist
-    /^(.+?)\s+by\s+(.+)/i,
-    // Pattern: Artist: Track
-    /^([^:]+?):\s*(.+)/
-  ];
+  // Try separator-based split first (most common YouTube pattern)
+  const separators = [' - ', ' – ', ' — ', ' | '];
+  for (const sep of separators) {
+    const idx = rawTitle.indexOf(sep);
+    if (idx > 0) {
+      const artist = stripNoise(rawTitle.slice(0, idx));
+      const track  = stripNoise(rawTitle.slice(idx + sep.length));
+      if (artist && track) return { artist, track };
+    }
+  }
 
-  // Remove common suffixes
-  const cleanTitle = title
-    .replace(/\s*\([^)]*\)/g, '')  // Remove anything in parentheses
-    .replace(/\s*\[[^\]]*\]/g, '')   // Remove anything in square brackets
-    .replace(/\s*\{[^}]*\}/g, '')    // Remove anything in curly braces
-    .replace(/\s*[|\-~]\s*.+$/, '')  // Remove anything after |, ~, or -
-    .replace(/\s+/g, ' ')             // Replace multiple spaces with single space
+  // Clean the title (brackets only) before trying remaining patterns
+  const cleanTitle = rawTitle
+    .replace(/\s*\([^)]*\)/g, '')
+    .replace(/\s*\[[^\]]*\]/g, '')
+    .replace(/\s*\{[^}]*\}/g, '')
+    .replace(/\s+/g, ' ')
     .trim();
 
-  // Try to match patterns
-  for (const pattern of patterns) {
-    const match = cleanTitle.match(pattern);
-    if (match && match[1] && match[2]) {
-      const artist = match[1].trim();
-      const track = match[2].trim();
-      if (artist && track) {
-        return { artist, track };
-      }
-    }
-  }
+  // Pattern: Track by Artist
+  const byMatch = cleanTitle.match(/^(.+?)\s+by\s+(.+)$/i);
+  if (byMatch) return { artist: byMatch[2].trim(), track: byMatch[1].trim() };
 
-  // If no pattern matched, try to split by common separators
-  const separators = [' - ', ' | ', ' ~ ', ' — '];
-  for (const sep of separators) {
-    const parts = cleanTitle.split(sep);
-    if (parts.length >= 2) {
-      const artist = parts[0].trim();
-      const track = parts.slice(1).join(sep).trim();
-      if (artist && track) {
-        return { artist, track };
-      }
-    }
-  }
+  // Pattern: Artist "Track"
+  const quoteMatch = cleanTitle.match(/^([^"]+?)\s*["'](.+?)["']/);
+  if (quoteMatch) return { artist: quoteMatch[1].trim(), track: quoteMatch[2].trim() };
 
-  // If all else fails, return null to indicate we couldn't parse it
+  // Pattern: Artist: Track
+  const colonMatch = cleanTitle.match(/^([^:]+?):\s*(.+)/);
+  if (colonMatch) return { artist: colonMatch[1].trim(), track: colonMatch[2].trim() };
+
   return { artist: null, track: null };
 }
 
 /**
- * Search for a recording in MusicBrainz
- * @param {string} artist - Original artist from YouTube
- * @param {string} title - Original title from YouTube
- * @returns {Promise<Object|null>} - Recording data or null if not confident in the match
+ * Search MusicBrainz for up to 5 recording candidates and score them.
+ * Falls back to raw title/author when extraction fails.
+ *
+ * @param {string} author  - YouTube uploader name
+ * @param {string} title   - YouTube video title
+ * @param {number} duration - Duration in seconds (from yt-dlp)
+ * @returns {Promise<Object|null>}
  */
-async function searchRecording(artist, title) {
+async function searchRecording(author, title, duration) {
   try {
-    // First, try to extract artist and track from the title
-    const { artist: extractedArtist, track } = extractArtistAndTrack(title);
-    
-    // If we couldn't extract both artist and track, don't try to match
-    if (!extractedArtist || !track) {
-      console.log('Could not reliably extract artist and track from title');
+    const { artist: extractedArtist, track: extractedTrack } = extractArtistAndTrack(title);
+
+    // Use extracted values when available, fall back to raw YouTube metadata
+    const searchArtist = extractedArtist || author || '';
+    const searchTrack  = extractedTrack  || title  || '';
+
+    if (!searchTrack) return null;
+
+    console.log(`[MusicBrainz] Searching for: "${searchArtist}" - "${searchTrack}"`);
+
+    const escQ = (s) => s.replace(/"/g, '').trim();
+    const query = searchArtist
+      ? `recording:"${escQ(searchTrack)}" AND artist:"${escQ(searchArtist)}"`
+      : `recording:"${escQ(searchTrack)}"`;
+
+    const response = await axios.get(`${MB_API_URL}/recording/`, {
+      params: { query, fmt: 'json', limit: 5 },
+      headers: { 'User-Agent': USER_AGENT },
+      timeout: 8000,
+    });
+
+    const recordings = response.data.recordings || [];
+    if (recordings.length === 0) {
+      console.log('[MusicBrainz] No results found');
       return null;
     }
 
-    console.log(`Searching MusicBrainz for: "${extractedArtist}" - "${track}"`);
-    
-    // Only try exact matches
-    const query = `recording:${encodeURIComponent(`"${track}"`)} AND artist:${encodeURIComponent(`"${extractedArtist}"`)}`;
-    
-    let recording;
-    try {
-      const response = await axios.get(`${MB_API_URL}/recording/`, {
-        params: {
-          query: query,
-          fmt: 'json',
-          limit: 1
-        },
-        headers: {
-          'User-Agent': USER_AGENT
-        }
-      });
+    // Normalize to scorer format (MusicBrainz stores duration in ms)
+    const candidates = recordings.map((r) => {
+      const release = r.releases?.[0] || {};
+      return {
+        title:       r.title,
+        artist:      r['artist-credit']?.[0]?.name || '',
+        album:       release.title || '',
+        year:        release.date ? new Date(release.date).getFullYear().toString() : '',
+        duration:    r.length ? Math.round(r.length / 1000) : null,
+        recordingId: r.id,
+        releaseId:   release.id || '',
+      };
+    });
 
-      if (!response.data.recordings || response.data.recordings.length === 0) {
-        console.log('No exact match found in MusicBrainz');
-        return null;
-      }
-      
-      recording = response.data.recordings[0];
-    } catch (error) {
-      console.error('Error querying MusicBrainz:', error.message);
+    const scored = scoreCandidates(candidates, searchArtist, searchTrack, duration);
+    const best   = pickBest(scored);
+
+    if (!best) {
+      console.log('[MusicBrainz] No candidate met the confidence threshold');
       return null;
     }
 
-    // Verify the match is good enough
-    const titleSimilarity = calculateSimilarity(recording.title, track);
-    const artistSimilarity = calculateSimilarity(
-      recording['artist-credit']?.[0]?.name || '',
-      extractedArtist
-    );
+    console.log(`[MusicBrainz] Match (${(best.score * 100).toFixed(1)}%): "${best.artist}" - "${best.title}"`);
+    return best;
 
-    console.log(`Match confidence - Title: ${(titleSimilarity * 100).toFixed(1)}%, Artist: ${(artistSimilarity * 100).toFixed(1)}%`);
-    
-    // Only proceed if both title and artist are very good matches
-    if (titleSimilarity < MIN_SIMILARITY_SCORE || artistSimilarity < MIN_SIMILARITY_SCORE) {
-      console.log('Match confidence too low, skipping');
-      return null;
-    }
-    
-    // Get release information for the recording
-    let release = null;
-    if (recording.releases && recording.releases.length > 0) {
-      try {
-        const releaseResponse = await axios.get(`${MB_API_URL}/release/${recording.releases[0].id}`, {
-          params: {
-            fmt: 'json',
-            inc: 'artists+recordings+release-groups+tags'
-          },
-          headers: {
-            'User-Agent': USER_AGENT
-          }
-        });
-        release = releaseResponse.data;
-      } catch (error) {
-        console.error('Error fetching release info:', error.message);
-      }
-    }
-    
-    // Return only the most basic and reliable metadata
-    const result = {
-      title: recording.title,
-      artist: recording['artist-credit']?.[0]?.name || extractedArtist,
-      album: release?.title || '',
-      year: release?.date ? new Date(release.date).getFullYear().toString() : '',
-      recordingId: recording.id,
-      releaseId: release?.id || ''
-    };
-    
-    console.log('Using metadata:', result);
-    return result;
-    
   } catch (error) {
-    console.error('Error in searchRecording:', error.message);
+    console.error('[MusicBrainz] Error:', error.message);
     return null;
   }
 }
 
-module.exports = {
-  searchRecording
-};
+module.exports = { extractArtistAndTrack, searchRecording };

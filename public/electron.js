@@ -7,7 +7,7 @@ const JSZip = require('jszip');
 const NodeID3 = require('node-id3');
 const axios = require('axios');
 const { create: createYoutubeDl } = require('youtube-dl-exec');
-const { searchRecording } = require(path.join(__dirname, '../src/services/musicbrainzService'));
+const { enrichMetadata } = require(path.join(__dirname, '../src/services/metadataService'));
 
 // When the app is packaged, native binaries are extracted to app.asar.unpacked/.
 // We must rewrite the path so the OS can actually execute them.
@@ -255,13 +255,14 @@ ipcMain.handle('download-video', async (event, { url, index, total, cachedInfo }
   const outputPath = path.join(tempDir, `${videoId}.mp3`);
   
   try {
-    let title, author, thumbnailUrl;
+    let title, author, thumbnailUrl, duration;
 
     if (cachedInfo) {
       // Reuse metadata already fetched during the validation step
-      title = cachedInfo.title;
-      author = cachedInfo.author;
+      title        = cachedInfo.title;
+      author       = cachedInfo.author;
       thumbnailUrl = cachedInfo.thumbnail;
+      duration     = cachedInfo.duration || 0;
     } else {
       const info = await ytdlpQueue.run(() => youtubedlWithCookies(url, {
         dumpSingleJson: true,
@@ -273,9 +274,10 @@ ipcMain.handle('download-video', async (event, { url, index, total, cachedInfo }
         throw new Error('Could not fetch video information');
       }
 
-      title = info.title || 'Unknown Title';
-      author = info.uploader || 'Unknown Author';
+      title        = info.title     || 'Unknown Title';
+      author       = info.uploader  || 'Unknown Author';
       thumbnailUrl = info.thumbnail || '';
+      duration     = info.duration  || 0;
     }
     
     // Download thumbnail
@@ -330,39 +332,51 @@ ipcMain.handle('download-video', async (event, { url, index, total, cachedInfo }
           albumArtist: author
         };
 
-        // Try to get enhanced metadata from MusicBrainz
+        // Try to get enhanced metadata from Deezer / MusicBrainz
         try {
-          const mbMetadata = await searchRecording(author, title);
-          if (mbMetadata) {
-            // Update tags with MusicBrainz metadata if available
+          const enriched = await enrichMetadata({ title, author, duration });
+          if (enriched) {
             Object.assign(tags, {
-              title: mbMetadata.title || title,
-              artist: mbMetadata.artist || author,
-              album: mbMetadata.album || 'YouTube Downloads',
-              year: mbMetadata.year || new Date().getFullYear().toString(),
-              genre: mbMetadata.genre || 'YouTube',
-              composer: mbMetadata.composer || '',
-              trackNumber: mbMetadata.trackNumber || '1',
-              totalTracks: mbMetadata.totalTracks || '1',
-              albumArtist: mbMetadata.albumArtist || author,
-              comment: `Downloaded from YouTube: ${url}`,
-              recordingId: mbMetadata.recordingId || '',
-              releaseId: mbMetadata.releaseId || ''
+              title:       enriched.title       || title,
+              artist:      enriched.artist      || author,
+              album:       enriched.album       || 'YouTube Downloads',
+              year:        enriched.year        || new Date().getFullYear().toString(),
+              genre:       enriched.genre       || 'YouTube',
+              composer:    enriched.composer    || '',
+              trackNumber: enriched.trackNumber || '1',
+              totalTracks: enriched.totalTracks || '1',
+              albumArtist: enriched.artist      || author,
             });
+
+            // Prefer Deezer cover art over YouTube thumbnail
+            if (enriched.coverUrl) {
+              try {
+                const coverRes = await axios.get(enriched.coverUrl, {
+                  responseType: 'arraybuffer',
+                  timeout: 8000,
+                });
+                const mime = coverRes.headers['content-type'] || 'image/jpeg';
+                thumbnailBuffer = {
+                  mime,
+                  type:        { id: 3 },
+                  description: 'Cover',
+                  imageBuffer: Buffer.from(coverRes.data),
+                };
+              } catch (coverErr) {
+                console.warn('[Metadata] Failed to download Deezer cover, using YouTube thumbnail:', coverErr.message);
+              }
+            }
           }
-        } catch (mbError) {
-          console.error('Error fetching MusicBrainz metadata:', mbError);
-          // Continue with basic metadata if MusicBrainz fails
+        } catch (enrichErr) {
+          console.error('[Metadata] Enrichment failed:', enrichErr);
         }
         
-        // Add thumbnail if available
+        // Add thumbnail / cover art if available
         if (thumbnailBuffer) {
-          tags.image = {
-            mime: 'image/jpeg',
-            type: { id: 3 },
-            description: 'Cover',
-            imageBuffer: thumbnailBuffer,
-          };
+          // thumbnailBuffer is either a raw Buffer (YouTube) or a full image object (Deezer)
+          tags.image = Buffer.isBuffer(thumbnailBuffer)
+            ? { mime: 'image/jpeg', type: { id: 3 }, description: 'Cover', imageBuffer: thumbnailBuffer }
+            : thumbnailBuffer;
         }
         
         // Write all metadata to the file
