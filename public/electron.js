@@ -96,6 +96,24 @@ function isBrowserNotFoundError(err) {
   );
 }
 
+// Catches Windows DPAPI decryption failures and SQLite lock errors that occur
+// when the browser is installed but its cookie database cannot be read.
+function isCookieExtractionError(err) {
+  const msg = (err.message || '').toLowerCase();
+  return (
+    msg.includes('database is locked') ||
+    msg.includes('unable to decrypt') ||
+    msg.includes('failed to decrypt') ||
+    msg.includes('cryptunprotectdata') ||
+    msg.includes('error extracting cookies') ||
+    msg.includes('error reading cookies') ||
+    msg.includes('keyring') ||
+    msg.includes('secret service') ||
+    msg.includes('no module named') ||
+    msg.includes('pycookiecheat')
+  );
+}
+
 async function youtubedlWithCookies(url, options) {
   if (cachedBrowser !== undefined) {
     const opts = cachedBrowser
@@ -115,7 +133,12 @@ async function youtubedlWithCookies(url, options) {
         console.log(`[yt-dlp] Browser ${browser} not found, trying next...`);
         continue;
       }
-      // Browser IS available but the request failed for another reason — cache and propagate
+      if (isCookieExtractionError(err)) {
+        console.warn(`[yt-dlp] Cookie extraction failed for ${browser} (${err.message}), trying next...`);
+        continue;
+      }
+      // Browser IS available and cookies are readable, but the request failed for
+      // another reason (e.g. network error, private video) — cache and propagate.
       cachedBrowser = browser;
       throw err;
     }
@@ -135,6 +158,7 @@ function createWindow() {
     height: 800,
     minWidth: 900,
     minHeight: 600,
+    backgroundColor: '#f5f5f5',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -183,6 +207,28 @@ const tempDir = path.join(app.getPath('temp'), 'youtube-music-converter');
 if (!fs.existsSync(tempDir)) {
   fs.mkdirSync(tempDir, { recursive: true });
 }
+
+// Open a native file-picker dialog and return the text content of the selected file.
+// Using dialog.showOpenDialog avoids the Chromium focus-loss flash that occurs on
+// Windows when an HTML <input type="file"> is programmatically clicked.
+ipcMain.handle('open-file-dialog', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Select URL list',
+    properties: ['openFile'],
+    filters: [{ name: 'Text Files', extensions: ['txt'] }],
+  });
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return { canceled: true };
+  }
+
+  try {
+    const content = fs.readFileSync(result.filePaths[0], 'utf8');
+    return { canceled: false, content };
+  } catch (err) {
+    return { canceled: false, error: err.message };
+  }
+});
 
 // Validate YouTube URL
 ipcMain.handle('validate-url', async (event, { url, index, total, silent = false }) => {

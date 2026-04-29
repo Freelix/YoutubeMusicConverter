@@ -35,7 +35,7 @@
       "node_modules/**/*"
     ],
     "win": {
-      "target": ["nsis", "portable"],
+      "target": ["nsis"],
       "publisherName": "YouTube Music Converter",
       "verifyUpdateCodeSignature": false,
       "rfc3161TimeStampServer": "http://timestamp.digicert.com"
@@ -48,9 +48,6 @@
       "createStartMenuShortcut": true,
       "shortcutName": "YouTube Music Converter",
       "deleteAppDataOnUninstall": true
-    },
-    "portable": {
-      "artifactName": "YouTubeMusicConverterPortable.exe"
     }
   },
   "dependencies": {

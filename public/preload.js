@@ -17,6 +17,7 @@ const invokeWithErrorHandling = async (method, ...args) => {
 
 // Expose the API to the renderer process
 contextBridge.exposeInMainWorld('electronAPI', {
+  openFileDialog: () => invokeWithErrorHandling('open-file-dialog'),
   validateUrl: (url) => invokeWithErrorHandling('validate-url', url),
   onValidationProgress: (callback) => {
     try {

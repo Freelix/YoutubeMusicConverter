@@ -5,58 +5,69 @@ const FileUpload = ({ onFileUpload }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState(null);
 
+  const parseContent = useCallback((content) => {
+    try {
+      const lines = content
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+
+      if (lines.length === 0) {
+        setError('The file is empty. Please provide at least one URL.');
+        return;
+      }
+
+      const urlPattern = /^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\/.+/i;
+      const invalidLines = lines.filter((line) => !urlPattern.test(line));
+
+      if (invalidLines.length > 0) {
+        setError(
+          `Invalid URLs found on ${invalidLines.length} line(s). Each line must contain a single YouTube URL.`
+        );
+        return;
+      }
+
+      const uniqueUrls = [];
+      const urlSet = new Set();
+      for (const url of lines) {
+        if (!urlSet.has(url)) {
+          urlSet.add(url);
+          uniqueUrls.push(url);
+        }
+      }
+
+      if (uniqueUrls.length < lines.length) {
+        const duplicateCount = lines.length - uniqueUrls.length;
+        setError(`Removed ${duplicateCount} duplicate URL${duplicateCount > 1 ? 's' : ''}. Processing ${uniqueUrls.length} unique URL${uniqueUrls.length !== 1 ? 's' : ''}.`);
+      } else {
+        setError(null);
+      }
+
+      onFileUpload(uniqueUrls);
+    } catch (err) {
+      setError('Failed to read file. Please try again.');
+    }
+  }, [onFileUpload]);
+
   const parseFile = useCallback((file) => {
     const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const content = e.target.result;
-        const lines = content
-          .split('\n')
-          .map((line) => line.trim())
-          .filter((line) => line.length > 0);
-
-        if (lines.length === 0) {
-          setError('The file is empty. Please provide at least one URL.');
-          return;
-        }
-
-        // Basic URL validation
-        const urlPattern = /^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\/.+/i;
-        const invalidLines = lines.filter((line) => !urlPattern.test(line));
-
-        if (invalidLines.length > 0) {
-          setError(
-            `Invalid URLs found on ${invalidLines.length} line(s). Each line must contain a single YouTube URL.`
-          );
-          return;
-        }
-
-        // Remove duplicate URLs while preserving order
-        const uniqueUrls = [];
-        const urlSet = new Set();
-        
-        for (const url of lines) {
-          if (!urlSet.has(url)) {
-            urlSet.add(url);
-            uniqueUrls.push(url);
-          }
-        }
-
-        // If duplicates were found, show an info message
-        if (uniqueUrls.length < lines.length) {
-          const duplicateCount = lines.length - uniqueUrls.length;
-          setError(`Removed ${duplicateCount} duplicate URL${duplicateCount > 1 ? 's' : ''}. Processing ${uniqueUrls.length} unique URL${uniqueUrls.length !== 1 ? 's' : ''}.`);
-        } else {
-          setError(null);
-        }
-
-        onFileUpload(uniqueUrls);
-      } catch (err) {
-        setError('Failed to read file. Please try again.');
-      }
-    };
+    reader.onload = (e) => parseContent(e.target.result);
     reader.readAsText(file);
-  }, [onFileUpload]);
+  }, [parseContent]);
+
+  const handleBrowseClick = useCallback(async () => {
+    // Use Electron's native dialog to avoid the white-flash caused by a
+    // programmatic click on a hidden <input type="file"> on Windows.
+    if (window.electronAPI?.openFileDialog) {
+      const result = await window.electronAPI.openFileDialog();
+      if (!result || result.canceled) return;
+      if (result.error) {
+        setError(`Failed to read file: ${result.error}`);
+        return;
+      }
+      parseContent(result.content);
+    }
+  }, [parseContent]);
 
   const handleDragOver = useCallback((e) => {
     e.preventDefault();
@@ -86,20 +97,6 @@ const FileUpload = ({ onFileUpload }) => {
     [parseFile]
   );
 
-  const handleFileInput = useCallback(
-    (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
-          parseFile(file);
-        } else {
-          setError('Please upload a .txt file');
-        }
-      }
-    },
-    [parseFile]
-  );
-
   return (
     <div className="file-upload-container">
       <div
@@ -123,15 +120,9 @@ const FileUpload = ({ onFileUpload }) => {
         <p className="upload-hint">
           Each line should contain a single YouTube URL
         </p>
-        <label className="upload-button">
-          <input
-            type="file"
-            accept=".txt,text/plain"
-            onChange={handleFileInput}
-            style={{ display: 'none' }}
-          />
+        <button className="upload-button" onClick={handleBrowseClick}>
           Browse Files
-        </label>
+        </button>
         {error && <div className="upload-error">{error}</div>}
       </div>
     </div>
