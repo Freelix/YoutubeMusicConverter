@@ -1,5 +1,24 @@
 # Release Notes
 
+## v0.6.4 — April 29, 2026
+
+### What's New in v0.6.4
+
+#### 🐛 Bug Fixes
+
+- **Fixed screen flicker when opening the file picker (Windows) — for real this time** — v0.6.2 masked the flicker by matching `BrowserWindow`'s `backgroundColor` to the app's content background (`#f5f5f5`). v0.6.3 then changed `backgroundColor` to `#667eea` (to fix the startup flash), which re-introduced a visible purple flash every time the file picker opened. The root cause — attaching the OS dialog to `mainWindow` as its Win32 owner — was never actually fixed. When an owned dialog opens, Windows sends `WM_NCACTIVATE(FALSE)` to the parent, causing Chromium to briefly repaint with `backgroundColor`. Removing `mainWindow` as the dialog owner eliminates the deactivation event entirely, so no repaint occurs regardless of `backgroundColor`.
+
+- **Fixed all downloads failing instantly on Windows** — Downloads were passing `--ffmpeg-location` unconditionally to `yt-dlp`, pointing at the `ffmpeg-static` binary resolved at startup. If that binary is missing, not executable, or resolves incorrectly in the packaged Windows build, `yt-dlp` fails immediately when it tries to post-process audio — before writing any output file. Crucially, this error was not recognised as a recoverable "infrastructure" failure, so `youtubedlWithCookies` cached the browser and re-threw, causing every subsequent download in the session to fail the same way with no retry. Two fixes address this:
+  1. `--ffmpeg-location` is now guarded by `fs.existsSync` and only passed when the binary is actually present on disk; otherwise `yt-dlp` falls back to whatever `ffmpeg` is on `PATH`.
+  2. A new `isInfrastructureError()` helper widens the fast-path catch to include ffmpeg, spawn, and permission errors (in addition to cookie errors), so these failures reset `cachedBrowser` and trigger the full discovery loop rather than propagating silently.
+
+#### 🔧 Diagnostics
+
+- **Startup warning if ffmpeg binary is missing** — On launch, the app now logs a `[startup]` warning if the resolved `ffmpeg-static` path does not exist on disk, making packaging issues immediately visible in Electron logs without needing to reproduce a failed download.
+- **Detailed download error logging** — The download catch block now logs the full `yt-dlp` stderr (`error.message`) under a `[download]` prefix, so the exact failure reason is visible without having to attach a debugger.
+
+---
+
 ## v0.6.3 — April 28, 2026
 
 ### What's New in v0.6.3
