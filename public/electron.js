@@ -1,12 +1,13 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { spawn } = require('child_process');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
 const JSZip = require('jszip');
 const NodeID3 = require('node-id3');
 const axios = require('axios');
-const { create: createYoutubeDl } = require('youtube-dl-exec');
+const { args: ytdlpArgs } = require('youtube-dl-exec');
 const { enrichMetadata } = require(path.join(__dirname, '../src/services/metadataService'));
 
 // When the app is packaged, native binaries are extracted to app.asar.unpacked/.
@@ -36,7 +37,43 @@ const ytdlpBinary = fixAsarPath(
     process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
   )
 );
-const youtubedl = createYoutubeDl(ytdlpBinary);
+if (!fs.existsSync(ytdlpBinary)) {
+  console.warn('[startup] yt-dlp binary not found at:', ytdlpBinary);
+} else {
+  console.log('[startup] yt-dlp binary found at:', ytdlpBinary);
+}
+
+// youtube-dl-exec's tinyspawn splits the binary path string by spaces before calling
+// child_process.spawn. On Windows the default NSIS install path is
+// "C:\Program Files\YouTube Music Converter\..." which contains spaces, causing every
+// spawn to fail with ENOENT. We bypass tinyspawn entirely and use child_process.spawn
+// directly, which passes the path as a single command argument and handles spaces correctly.
+function spawnYtDlp(binaryPath, url, flags = {}) {
+  const flagArgs = ytdlpArgs(flags);
+  return new Promise((resolve, reject) => {
+    const stdoutBufs = [];
+    const stderrBufs = [];
+    const child = spawn(binaryPath, [url, ...flagArgs], { windowsHide: true });
+    child.stdout.on('data', d => stdoutBufs.push(d));
+    child.stderr.on('data', d => stderrBufs.push(d));
+    child.on('error', reject);
+    child.on('close', (code, signal) => {
+      const stdout = Buffer.concat(stdoutBufs).toString().trim();
+      const stderr = Buffer.concat(stderrBufs).toString().trim();
+      if (code !== 0) {
+        const err = new Error(stderr || `yt-dlp exited with code ${code}`);
+        Object.assign(err, { code, signal, stderr, stdout, cmd: binaryPath, args: [url, ...flagArgs] });
+        reject(err);
+      } else if (stdout.startsWith('{')) {
+        try { resolve(JSON.parse(stdout)); } catch (e) { resolve(stdout); }
+      } else {
+        resolve(stdout);
+      }
+    });
+  });
+}
+
+const youtubedl = (url, flags) => spawnYtDlp(ytdlpBinary, url, flags);
 
 // --- Rate-limited queue for yt-dlp calls ---
 // Serializes all yt-dlp invocations and enforces a minimum delay between them

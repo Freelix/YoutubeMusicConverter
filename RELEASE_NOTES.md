@@ -1,5 +1,17 @@
 # Release Notes
 
+## v0.6.6 — April 29, 2026
+
+### What's New in v0.6.6
+
+#### 🐛 Bug Fixes
+
+- **Fixed downloads failing on Windows — actual root cause** — All previous fix attempts (v0.6.2–v0.6.5) repaired the wrong place. The true cause was never the cookie discovery logic: it was that `youtube-dl-exec@3.0.26` uses `tinyspawn` internally, which splits the binary path string by spaces (`path.split(' ')`) before calling `child_process.spawn`. The default NSIS installation path on Windows is `C:\Program Files\YouTube Music Converter\...`, which contains spaces. This caused every yt-dlp spawn to fail with `ENOENT` — `spawn("C:\Program", ...)` — before any YouTube request was even made. The fix replaces `createYoutubeDl(ytdlpBinary)` with a direct `child_process.spawn(binaryPath, [url, ...flags])` call that passes the binary path as a single command argument, correctly handling spaces in the install path.
+
+- **Fixed startup flicker on Windows** — `src/index.css` set `body { background: #f5f5f5 }` which overrode the `background-color: #667eea` declared in `index.html`'s inline `<style>`. This caused the window to briefly show an off-white body background during the gap between window show and React's first render. Removed the body background override so the window background matches the splash gradient from the first frame.
+
+---
+
 ## v0.6.5 — April 29, 2026
 
 ### What's New in v0.6.5
