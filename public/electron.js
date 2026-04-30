@@ -21,6 +21,11 @@ function fixAsarPath(p) {
 const ffmpegPath = fixAsarPath(ffmpegStatic);
 if (ffmpegPath) {
   ffmpeg.setFfmpegPath(ffmpegPath);
+  if (!fs.existsSync(ffmpegPath)) {
+    console.warn('[startup] ffmpeg binary not found at:', ffmpegPath);
+  }
+} else {
+  console.warn('[startup] ffmpegStatic returned a falsy path');
 }
 
 // Resolve the yt-dlp binary that ships with youtube-dl-exec
@@ -114,6 +119,19 @@ function isCookieExtractionError(err) {
   );
 }
 
+function isInfrastructureError(err) {
+  const msg = (err.message || '').toLowerCase();
+  return (
+    isCookieExtractionError(err) ||
+    isBrowserNotFoundError(err) ||
+    msg.includes('ffmpeg') ||
+    msg.includes('not found') ||
+    msg.includes('no such file') ||
+    msg.includes('permission denied') ||
+    msg.includes('spawn')
+  );
+}
+
 async function youtubedlWithCookies(url, options) {
   if (cachedBrowser !== undefined) {
     const opts = cachedBrowser
@@ -122,7 +140,7 @@ async function youtubedlWithCookies(url, options) {
     try {
       return await youtubedl(url, opts);
     } catch (err) {
-      if (cachedBrowser && (isCookieExtractionError(err) || isBrowserNotFoundError(err))) {
+      if (cachedBrowser && isInfrastructureError(err)) {
         console.warn(`[yt-dlp] Cached browser "${cachedBrowser}" failed (${err.message}), resetting cache...`);
         cachedBrowser = undefined;
         return youtubedlWithCookies(url, options);
@@ -221,7 +239,7 @@ if (!fs.existsSync(tempDir)) {
 // Using dialog.showOpenDialog avoids the Chromium focus-loss flash that occurs on
 // Windows when an HTML <input type="file"> is programmatically clicked.
 ipcMain.handle('open-file-dialog', async () => {
-  const result = await dialog.showOpenDialog(mainWindow, {
+  const result = await dialog.showOpenDialog({
     title: 'Select URL list',
     properties: ['openFile'],
     filters: [{ name: 'Text Files', extensions: ['txt'] }],
@@ -363,7 +381,7 @@ ipcMain.handle('download-video', async (event, { url, index, total, cachedInfo }
       noWarnings: true,
       noCheckCertificate: true,
       preferFreeFormats: true,
-      ffmpegLocation: ffmpegPath,
+      ...(ffmpegPath && fs.existsSync(ffmpegPath) ? { ffmpegLocation: ffmpegPath } : {}),
       referer: url,
       addHeader: [
         'referer:youtube.com',
@@ -462,7 +480,7 @@ ipcMain.handle('download-video', async (event, { url, index, total, cachedInfo }
     };
     
   } catch (error) {
-    console.error('Download error:', error);
+    console.error('[download] yt-dlp failed:', error.message);
     return {
       success: false,
       error: error.message || 'Failed to download video',
