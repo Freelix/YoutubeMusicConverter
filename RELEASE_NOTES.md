@@ -1,5 +1,23 @@
 # Release Notes
 
+## v0.6.5 — April 29, 2026
+
+### What's New in v0.6.5
+
+#### 🐛 Bug Fixes
+
+- **Fixed downloads failing on Windows — root cause finally identified** — Every release since v0.6.0 broke downloads on Windows. The three previous fix attempts (v0.6.2–v0.6.4) all patched the wrong place: they improved the `cachedBrowser` fast-path, but the actual regression — introduced in v0.6.0's metadata-services refactor — was never touched. Two breaking changes were responsible:
+
+  1. **`youtubedlWithCookies` discovery loop exited early (primary cause)** — The browser-cookie discovery loop (`chrome → edge → firefox → no-cookie`) was designed to fall back to no-cookie mode when no browser works. However, if any browser was *found* by yt-dlp but its request failed with an error message not covered by `isCookieExtractionError` (for example, Windows-style `"Access is denied"`), the loop executed `cachedBrowser = browser; throw err` — skipping the no-cookie fallback entirely. Since Edge is always installed on Windows 10/11, this triggered on every Windows machine. All subsequent calls hit the fast path with the broken Edge entry, failed again, and every URL was reported as failed before any download was attempted. The discovery loop now uses a catch-all `continue` for every browser error; the no-cookie path (identical to the working v0.5.0 behaviour) is always reached.
+
+  2. **`ffmpegLocation` was conditionally omitted (contributing cause)** — v0.6.2 guarded `ffmpegLocation` with `fs.existsSync(ffmpegPath)` so it would only be passed to yt-dlp when the binary was confirmed present. If the check returned false (path encoding issues, failed extraction), yt-dlp received no ffmpeg path. On Windows, where ffmpeg is not in `PATH`, this caused audio conversion to fail on every download. Restored to always passing `ffmpegLocation: ffmpegPath`, matching v0.5.0 behaviour.
+
+- **Removed `isInfrastructureError` helper** — The function added in v0.6.4 matched strings like `"not found"` that appear in legitimate YouTube errors (e.g. video unavailable), causing the fast path to silently retry rather than surface the real error. Since the discovery loop now safely exhausts all options without throwing, this broad helper is no longer needed.
+
+- **Fixed remaining startup flicker** — The main-app wrapper's opacity transition started *after* the splash screen unmounted, leaving a one-frame gap where neither element was fully visible. The main app now begins fading in at 1.5 s — simultaneously with the splash fade — so both transitions overlap and the window always has fully opaque content.
+
+---
+
 ## v0.6.4 — April 29, 2026
 
 ### What's New in v0.6.4
