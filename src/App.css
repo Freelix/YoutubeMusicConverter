@@ -18,6 +18,11 @@
   pointer-events: none;
 }
 
+.main-app-wrapper.fading {
+  opacity: 1;
+  pointer-events: none;
+}
+
 .main-app-wrapper.visible {
   opacity: 1;
 }

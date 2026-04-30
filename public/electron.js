@@ -119,19 +119,6 @@ function isCookieExtractionError(err) {
   );
 }
 
-function isInfrastructureError(err) {
-  const msg = (err.message || '').toLowerCase();
-  return (
-    isCookieExtractionError(err) ||
-    isBrowserNotFoundError(err) ||
-    msg.includes('ffmpeg') ||
-    msg.includes('not found') ||
-    msg.includes('no such file') ||
-    msg.includes('permission denied') ||
-    msg.includes('spawn')
-  );
-}
-
 async function youtubedlWithCookies(url, options) {
   if (cachedBrowser !== undefined) {
     const opts = cachedBrowser
@@ -140,15 +127,20 @@ async function youtubedlWithCookies(url, options) {
     try {
       return await youtubedl(url, opts);
     } catch (err) {
-      if (cachedBrowser && isInfrastructureError(err)) {
-        console.warn(`[yt-dlp] Cached browser "${cachedBrowser}" failed (${err.message}), resetting cache...`);
-        cachedBrowser = undefined;
-        return youtubedlWithCookies(url, options);
+      if (cachedBrowser && (isBrowserNotFoundError(err) || isCookieExtractionError(err))) {
+        // Cookie-specific failure: abandon browser cookies and fall back to no-cookie mode.
+        console.warn(`[yt-dlp] Cached browser "${cachedBrowser}" cookie error (${err.message}), falling back to no-cookie`);
+        cachedBrowser = false;
+        return youtubedl(url, options);
       }
       throw err;
     }
   }
 
+  // Discovery loop: try each browser's cookies. Any failure (not found, locked DB,
+  // unrecognized Windows error, etc.) is treated as "skip this browser and try the next".
+  // This ensures we always reach the no-cookie fallback — identical to v0.5.0 behaviour
+  // for users where no browser cookie extraction works.
   for (const browser of BROWSER_ORDER) {
     try {
       const result = await youtubedl(url, { ...options, cookiesFromBrowser: browser });
@@ -156,22 +148,12 @@ async function youtubedlWithCookies(url, options) {
       console.log(`[yt-dlp] Using ${browser} cookies`);
       return result;
     } catch (err) {
-      if (isBrowserNotFoundError(err)) {
-        console.log(`[yt-dlp] Browser ${browser} not found, trying next...`);
-        continue;
-      }
-      if (isCookieExtractionError(err)) {
-        console.warn(`[yt-dlp] Cookie extraction failed for ${browser} (${err.message}), trying next...`);
-        continue;
-      }
-      // Browser IS available and cookies are readable, but the request failed for
-      // another reason (e.g. network error, private video) — cache and propagate.
-      cachedBrowser = browser;
-      throw err;
+      console.warn(`[yt-dlp] Browser ${browser} skipped (${err.message.split('\n')[0]})`);
+      continue;
     }
   }
 
-  console.log('[yt-dlp] No browser found for cookies, proceeding without');
+  console.log('[yt-dlp] No browser cookies available, proceeding without (same as v0.5.0)');
   cachedBrowser = false;
   return youtubedl(url, options);
 }
@@ -381,7 +363,7 @@ ipcMain.handle('download-video', async (event, { url, index, total, cachedInfo }
       noWarnings: true,
       noCheckCertificate: true,
       preferFreeFormats: true,
-      ...(ffmpegPath && fs.existsSync(ffmpegPath) ? { ffmpegLocation: ffmpegPath } : {}),
+      ffmpegLocation: ffmpegPath,
       referer: url,
       addHeader: [
         'referer:youtube.com',

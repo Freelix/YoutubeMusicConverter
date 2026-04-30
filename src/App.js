@@ -8,6 +8,8 @@ function App() {
   const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
+    // At 1.5s: splash starts fading out AND main app starts fading in (overlapping)
+    // At 2.0s: splash unmounts (already transparent), main app is fully visible
     const fadeTimer = setTimeout(() => setSplashFading(true), 1500);
     const hideTimer = setTimeout(() => setShowSplash(false), 2000);
     return () => {
@@ -19,7 +21,7 @@ function App() {
   return (
     <div className="App">
       {showSplash && <SplashScreen fading={splashFading} />}
-      <div className={`main-app-wrapper ${showSplash ? 'hidden' : 'visible'}`}>
+      <div className={`main-app-wrapper ${!splashFading ? 'hidden' : showSplash ? 'fading' : 'visible'}`}>
         <MainApp />
       </div>
     </div>
